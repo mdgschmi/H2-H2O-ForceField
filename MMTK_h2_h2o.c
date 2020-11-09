@@ -27,7 +27,11 @@ h2h2o_evaluator(PyFFEnergyTermObject *self,
    gradients, second derivatives).
 */
 {
-  double e;
+  int Nwater=20;
+  double e=0.0;
+  double totalgradx=0.0;
+  double totalgrady=0.0;
+  double totalgradz=0.0;
   int radindx,theindx,chiindx,arayindx,sign;
   int chiindxstore;
   int ihighr,ihight,ihighc;
@@ -37,7 +41,7 @@ h2h2o_evaluator(PyFFEnergyTermObject *self,
   double deltar=0.046;
   vector3 *coordinates = (vector3 *)input->coordinates->data;
   vector3 *g;
-  int i,j;
+  int i,j,n;
   int atom_index = (int)self->param[0];  /* atom index */
   //int atom_index2 = (int)self->param[1];  /* atom index */
   //int atom_index3 = (int)self->param[2];  /* atom index */
@@ -63,7 +67,6 @@ h2h2o_evaluator(PyFFEnergyTermObject *self,
 
   PyArrayObject *rotmatrixarray = (PyArrayObject *)self->data[5];
   double *rotmat=(double *)rotmatrixarray->data;
-
   
   /* energy_terms is an array because each routine could compute
      several terms that should logically be kept apart. For example,
@@ -87,189 +90,198 @@ h2h2o_evaluator(PyFFEnergyTermObject *self,
   double rotgr[3];
   double gr[3];
 
-  for (i=0;i<3;i++)
+  for (n=0;n<Nwater;n++)
     {
-      Rvec[i]=coordinates[atom_index][i]-r_com[i];
-    }
-  
-  // Construct Rotation Matrix
-  double RotMatrix[3][3]=
-    {
-      {rotmat[0],rotmat[1],rotmat[2]},
-      {rotmat[3],rotmat[4],rotmat[5]},
-      {rotmat[6],rotmat[7],rotmat[8]}
-    };
-
-  // Rotation Matrix is Orthogonal by Construction
-  // So Inverse is the Transpose
-  double RotInverse[3][3]=
-    {
-      {rotmat[0], rotmat[3], rotmat[6]},
-      {rotmat[1], rotmat[4], rotmat[7]},
-      {rotmat[2], rotmat[5], rotmat[8]}
-    };
-  
-  // Rotate Water and para-hydrogen
-  // from Space Fixed Frame to Internal Water Frame
-  for (i=0;i<3;i++)
-    {
-      rotpH2[i]=0.0;
-      for (j=0;j<3;j++)
+      
+      for (i=0;i<3;i++)
 	{
-	  rotpH2[i]+=RotMatrix[i][j]*Rvec[j];
+	  Rvec[i]=coordinates[atom_index][i]-r_com[i+3*n];
 	}
-    }
-  
-  // Calculate r
-  r=sqrt(pow(rotpH2[0],2.)+pow(rotpH2[1],2.)+pow(rotpH2[2],2));
-  
-  // Calculate drdx for each component
-  drdx[0]=rotpH2[0]/r;
-  drdx[1]=rotpH2[1]/r;
-  drdx[2]=rotpH2[2]/r;
-
-  // Calculate theta  
-  theta=acos(rotpH2[2]/r)*180./(M_PI);
-
-  if (theta < 0) {
-    theta=theta+360.;
-  }
-
- 
-  // Calculate dthetadx for each component
-  dthetadx[0]=rotpH2[0]*rotpH2[2]/(sqrt(pow(rotpH2[0],2.)+pow(rotpH2[1],2.)));
-  dthetadx[0]=dthetadx[0]/(r*r);
-  dthetadx[1]=rotpH2[1]*rotpH2[2]/(sqrt(pow(rotpH2[0],2.)+pow(rotpH2[1],2.)));
-  dthetadx[1]=dthetadx[1]/(r*r);
-  dthetadx[2]=-1.0*(sqrt(pow(rotpH2[0],2.)+pow(rotpH2[1],2.)))/(r*r);
-  
-
-  dthetadx[0]=dthetadx[0]*180./(M_PI);
-  dthetadx[1]=dthetadx[1]*180./(M_PI);
-  dthetadx[2]=dthetadx[2]*180./(M_PI);
-  
-  // Calculate chi  
-  chi=atan(rotpH2[1]/rotpH2[0])*180./(M_PI);
-  
-  if (chi < 0){
-    chi=chi+360.;
-  }
-
-  // Calculate dchidx for each component
-  dchidx[0]=-1.0*rotpH2[1]/(pow(rotpH2[0],2.)+pow(rotpH2[1],2.));
-  dchidx[1]=rotpH2[0]/(pow(rotpH2[0],2.)+pow(rotpH2[1],2.));
-  dchidx[2]=0.0;
-  
-  dchidx[0]=dchidx[0]*180./(M_PI);
-  dchidx[1]=dchidx[1]*180./(M_PI);
-
-  //  printf("R : %e   Theta : %e   Chi : %e \n", r, theta, chi);
-
-  radindx=(int)round((r/.0529177249-rmin)/deltar);
-  theindx=(int)round(theta);
-  chiindx=(int)round(chi);
-  chiindxstore=chiindx;
-  
-  if (radindx<0)
-    radindx=0;
-  if (radindx>500)
-    radindx=500;
-  if (theindx<0)
-    theindx=0;
-  if (theindx>180)
-    theindx=180;
-  if (chiindx<0)
-    chiindx=0;
-  if(chiindx>360)
-    chiindx=360;
-  
-  sign=1;
-  
-  if(chiindx>90)
-    {
-      if(chiindx<180)
+      
+      // Construct Rotation Matrix
+      double RotMatrix[3][3]=
 	{
-	  chiindx=180-chiindx;
-	  sign=-1;
+	  {rotmat[0+9*n],rotmat[1+9*n],rotmat[2+9*n]},
+	  {rotmat[3+9*n],rotmat[4+9*n],rotmat[5+9*n]},
+	  {rotmat[6+9*n],rotmat[7+9*n],rotmat[8+9*n]}
+	};
+      
+      // Rotation Matrix is Orthogonal by Construction
+      // So Inverse is the Transpose
+      double RotInverse[3][3]=
+	{
+	  {rotmat[0+9*n], rotmat[3+9*n], rotmat[6+9*n]},
+	  {rotmat[1+9*n], rotmat[4+9*n], rotmat[7+9*n]},
+	  {rotmat[2+9*n], rotmat[5+9*n], rotmat[8+9*n]}
+	};
+      
+      // Rotate Water and para-hydrogen
+      // from Space Fixed Frame to Internal Water Frame
+      for (i=0;i<3;i++)
+	{
+	  rotpH2[i]=0.0;
+	  for (j=0;j<3;j++)
+	    {
+	      rotpH2[i]+=RotMatrix[i][j]*Rvec[j];
+	    }
 	}
-      else
-	if(chiindx>270)
-	  {
-	    chiindx=360-chiindx;
-	    sign=-1;
-	  }
-	else
-	  chiindx=chiindx-180;
+      
+      // Calculate r
+      r=sqrt(pow(rotpH2[0],2.)+pow(rotpH2[1],2.)+pow(rotpH2[2],2));
+      
+      // Calculate drdx for each component
+      drdx[0]=rotpH2[0]/r;
+      drdx[1]=rotpH2[1]/r;
+      drdx[2]=rotpH2[2]/r;
+      
+      // Calculate theta  
+      theta=acos(rotpH2[2]/r)*180./(M_PI);
+      
+      if (theta < 0) {
+	theta=theta+360.;
+      }
+      
+      
+      // Calculate dthetadx for each component
+      dthetadx[0]=rotpH2[0]*rotpH2[2]/(sqrt(pow(rotpH2[0],2.)+pow(rotpH2[1],2.)));
+      dthetadx[0]=dthetadx[0]/(r*r);
+      dthetadx[1]=rotpH2[1]*rotpH2[2]/(sqrt(pow(rotpH2[0],2.)+pow(rotpH2[1],2.)));
+      dthetadx[1]=dthetadx[1]/(r*r);
+      dthetadx[2]=-1.0*(sqrt(pow(rotpH2[0],2.)+pow(rotpH2[1],2.)))/(r*r);
+      
+      
+      dthetadx[0]=dthetadx[0]*180./(M_PI);
+      dthetadx[1]=dthetadx[1]*180./(M_PI);
+      dthetadx[2]=dthetadx[2]*180./(M_PI);
+      
+      // Calculate chi  
+      chi=atan(rotpH2[1]/rotpH2[0])*180./(M_PI);
+      
+      if (chi < 0){
+	chi=chi+360.;
+      }
+      
+      // Calculate dchidx for each component
+      dchidx[0]=-1.0*rotpH2[1]/(pow(rotpH2[0],2.)+pow(rotpH2[1],2.));
+      dchidx[1]=rotpH2[0]/(pow(rotpH2[0],2.)+pow(rotpH2[1],2.));
+      dchidx[2]=0.0;
+      
+      dchidx[0]=dchidx[0]*180./(M_PI);
+      dchidx[1]=dchidx[1]*180./(M_PI);
+      
+      //  printf("R : %e   Theta : %e   Chi : %e \n", r, theta, chi);
+      
+      radindx=(int)round((r/.0529177249-rmin)/deltar);
+      theindx=(int)round(theta);
+      chiindx=(int)round(chi);
+      chiindxstore=chiindx;
+      
+      if (radindx<0)
+	radindx=0;
+      if (radindx>500)
+	radindx=500;
+      if (theindx<0)
+	theindx=0;
+      if (theindx>180)
+	theindx=180;
+      if (chiindx<0)
+	chiindx=0;
+      if(chiindx>360)
+	chiindx=360;
+      
+      sign=1;
+      
+      if(chiindx>90)
+	{
+	  if(chiindx<180)
+	    {
+	      chiindx=180-chiindx;
+	      sign=-1;
+	    }
+	  else
+	    if(chiindx>270)
+	      {
+		chiindx=360-chiindx;
+		sign=-1;
+	      }
+	    else
+	      chiindx=chiindx-180;
+	}
+      
+      arayindx=chiindx+91*theindx+91*181*radindx;
+      ihighr=arayindx+181*91;
+      ihight=arayindx+91;
+      ihighc=arayindx+1;
+      
+      vadj=pot[arayindx];
+      dvdradj=dvdr[arayindx];
+      dvdtadj=dvdt[arayindx];
+      dvdcadj=dvdc[arayindx];
+      
+      if (ihighr < 8251971)
+	{
+	  vadj=vadj+((pot[ihighr]-pot[arayindx])/deltar)*
+	    (r/.0529177249-(radindx*deltar+rmin));
+	  vadj=vadj+((pot[ihight]-pot[arayindx])/(1))*(theta-theindx);
+	  vadj=vadj+((pot[ihighc]-pot[arayindx])/(1))*(chi-chiindxstore);
+	  
+	  dvdradj=dvdradj+((dvdr[ihighr]-dvdr[arayindx])/(deltar))*
+	    (r/.0529177249-(radindx*deltar+rmin));
+	  dvdradj=dvdradj+((dvdr[ihight]-dvdr[arayindx])/(1))*(theta-theindx);
+	  dvdradj=dvdradj+((dvdr[ihighc]-dvdr[arayindx])/(1))*(chi-chiindxstore);
+	  
+	  dvdtadj=dvdtadj+((dvdt[ihighr]-dvdt[arayindx])/(deltar))*
+	    (r/.0529177249-(radindx*deltar+rmin));
+	  dvdtadj=dvdtadj+((dvdt[ihight]-dvdt[arayindx])/(1))*(theta-theindx);
+	  dvdtadj=dvdtadj+((dvdt[ihighc]-dvdt[arayindx])/(1))*(chi-chiindxstore);
+	  
+	  dvdcadj=dvdcadj+((dvdc[ihighr]-dvdc[arayindx])/(deltar))*
+	    (r/.0529177249-(radindx*deltar+rmin));
+	  dvdcadj=dvdcadj+((dvdc[ihight]-dvdc[arayindx])/(1))*(theta-theindx);
+	  dvdcadj=dvdcadj+((dvdc[ihighc]-dvdc[arayindx])/(1))*(chi-chiindxstore);
+	}
+      
+      e=e+vadj;
+      
+      // now calculate the gradients!
+      for (i=0; i < 3; i ++)
+	{ 
+	  rotgr[i]=(dvdradj*drdx[i] + dvdtadj*dthetadx[i]+dvdcadj*dchidx[i]*sign);
+	}
+      
+      
+      // Rotate the gradients to match the original coordinates
+      for (i=0;i<3;i++)
+	{
+	  gr[i]=0.0;
+	  for (j=0;j<3;j++)
+	    {
+	      gr[i]+=RotInverse[i][j]*rotgr[j];
+	    }
+	}
+      totalgradx=totalgradx+gr[0];
+      totalgrady=totalgrady+gr[1];
+      totalgradz=totalgradz+gr[2];
+      
+      
     }
   
-  arayindx=chiindx+91*theindx+91*181*radindx;
-  ihighr=arayindx+181*91;
-  ihight=arayindx+91;
-  ihighc=arayindx+1;
+  energy->energy_terms[self->index] = e;//(double)beads;                                                                                                                                                                                           
   
-  vadj=pot[arayindx];
-  dvdradj=dvdr[arayindx];
-  dvdtadj=dvdt[arayindx];
-  dvdcadj=dvdc[arayindx];
-  
-  if (ihighr <= 8251971)
-    {
-      vadj=vadj+((pot[ihighr]-pot[arayindx])/deltar)*
-	(r/.0529177249-(radindx*deltar+rmin));
-      vadj=vadj+((pot[ihight]-pot[arayindx])/(1))*(theta-theindx);
-      vadj=vadj+((pot[ihighc]-pot[arayindx])/(1))*(chi-chiindxstore);
-      
-      dvdradj=dvdradj+((dvdr[ihighr]-dvdr[arayindx])/(deltar))*
-	(r/.0529177249-(radindx*deltar+rmin));
-      dvdradj=dvdradj+((dvdr[ihight]-dvdr[arayindx])/(1))*(theta-theindx);
-      dvdradj=dvdradj+((dvdr[ihighc]-dvdr[arayindx])/(1))*(chi-chiindxstore);
-      
-      dvdtadj=dvdtadj+((dvdt[ihighr]-dvdt[arayindx])/(deltar))*
-	(r/.0529177249-(radindx*deltar+rmin));
-      dvdtadj=dvdtadj+((dvdt[ihight]-dvdt[arayindx])/(1))*(theta-theindx);
-      dvdtadj=dvdtadj+((dvdt[ihighc]-dvdt[arayindx])/(1))*(chi-chiindxstore);
-      
-      dvdcadj=dvdcadj+((dvdc[ihighr]-dvdc[arayindx])/(deltar))*
-	(r/.0529177249-(radindx*deltar+rmin));
-      dvdcadj=dvdcadj+((dvdc[ihight]-dvdc[arayindx])/(1))*(theta-theindx);
-      dvdcadj=dvdcadj+((dvdc[ihighc]-dvdc[arayindx])/(1))*(chi-chiindxstore);
-    }
-  
-  e=vadj;
-  energy->energy_terms[self->index] = e;//(double)beads;
- 
-  // If only the energy is asked for, stop here. 
+  // If only the energy is asked for, stop here.                                                                                                                                                                                                   
   if (energy->gradients == NULL)
     return;
- 
-  // now calculate the gradients!
-  for (i=0; i < 3; i ++)
-    { 
-      rotgr[i]=(dvdradj*drdx[i] + dvdtadj*dthetadx[i]+dvdcadj*dchidx[i]*sign);
-    }
-
-  // Rotate the gradients to match the original coordinates
-   for (i=0;i<3;i++)
-    {
-      gr[i]=0.0;
-      for (j=0;j<3;j++)
-	{
-	  gr[i]+=RotInverse[i][j]*rotgr[j];
-	}
-    }
-
-   //   printf("Grads Before ReRot : %e %e %e \n", rotgr[0],rotgr[1],rotgr[2]);
-   //printf("Grads After  ReRot : %e %e %e \n", gr[0], gr[1],gr[2]);
-
+  
   
   // Add the gradient contribution to the global gradient array.
   //   It would be a serious error to use '=' instead of '+=' here,
   //   in that case all previously calculated forces would be erased.
   g = (vector3 *)((PyArrayObject*)energy->gradients)->data;
   
-  g[atom_index][0]+=gr[0];
-  g[atom_index][1]+=gr[1];
-  g[atom_index][2]+=gr[2];
+  g[atom_index][0]+=totalgradx;
+  g[atom_index][1]+=totalgrady;
+  g[atom_index][2]+=totalgradz;
+
 }
 
 /* A utility function that allocates memory for a copy of a string */
@@ -298,9 +310,6 @@ H2H2OTerm(PyObject *dummy, PyObject *args)
   PyArrayObject *r_com;
   PyArrayObject *rotmat;
   int atom_index;
-  double x1,y1,z1; /*Water Oxygen    Coordinates */
-  double x2,y2,z2; /*Water Hydrogen1 Coordinates */
-  double x3,y3,z3; /*Water Hydrogen2 Coordinates */
 
   /* Create a new energy term object and return if the creation fails. */
   self = PyFFEnergyTerm_New();
@@ -308,7 +317,7 @@ H2H2OTerm(PyObject *dummy, PyObject *args)
     return NULL;
 
   /* Convert the parameters to C data types.*/
-  if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!iddddddddd",
+  if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!i",
 			&PyUniverseSpec_Type, &self->universe_spec,
 			&PyArray_Type, &pot,
 			&PyArray_Type, &dvdr,
@@ -316,7 +325,7 @@ H2H2OTerm(PyObject *dummy, PyObject *args)
 			&PyArray_Type, &dvdc,
 			&PyArray_Type, &r_com,
 			&PyArray_Type, &rotmat,
-			&atom_index,&x1,&y1,&z1,&x2,&y2,&z2,&x3,&y3,&z3))
+			&atom_index))
     return NULL;
   /* We keep a reference to the universe_spec in the newly created
      energy term object, so we have to increase the reference count. */
@@ -334,15 +343,6 @@ H2H2OTerm(PyObject *dummy, PyObject *args)
      are only 40 slots (double) there, if you need more space, you can use
      self->data, an array for up to 40 Python object pointers. */
   self->param[0] = (double) atom_index;
-  self->param[1] = (double) x1;
-  self->param[2] = (double) y1;
-  self->param[3] = (double) z1;
-  self->param[4] = (double) x2;
-  self->param[5] = (double) y2;
-  self->param[6] = (double) z2;
-  self->param[7] = (double) x3;
-  self->param[8] = (double) y3;
-  self->param[9] = (double) z3;
 
   /* self->data is the other storage area for parameters. There are
      40 Python object slots there */
