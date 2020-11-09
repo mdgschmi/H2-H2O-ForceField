@@ -1,4 +1,4 @@
-# Quartic potential with respect to a fixed point in space
+# Forcefield for parahydrogen interacting with an external clathrate hydrate (water cage)
 from MMTK.ForceFields.ForceField import ForceField
 from MMTK_h2_h2o import H2H2OTerm
 from numpy import zeros
@@ -19,19 +19,11 @@ class H2H2OForceField(ForceField):
 
     """
     def __init__(self, atom1):
-        #self.id1 = self.getAtomParameterIds((atom1,))[0]
         self.atom_index = self.getAtomParameterIndices([atom1])[0]
-        # From HarmonicOscillatorFF.py
-
-        #self.arguments = (self.id1, beads)     Original Comment out
         self.arguments = (self.atom_index,)
-        #self.arguments=(self.id1,)             Previously used
 
-        # Initialize the ForceField class, giving a name to this one.
+	# Initialize the ForceField class, giving a name to this one.
         ForceField.__init__(self, 'h2h2o')
-        # Store the parameters for later use.
- #       self.center = center
-       # self.beads=beads
 
     # The following method is called by the energy evaluation engine
     # to inquire if this force field term has all the parameters it
@@ -44,7 +36,6 @@ class H2H2OForceField(ForceField):
         return True
 
     def evaluatorTerms(self, universe, subset1, subset2, global_data):
-        #atom1 = self.getAtomParameters(universe, [self.id1], global_data)[0]
         if subset1 is not None:
             s1 = subset1.atomList()
             s2 = subset2.atomList()
@@ -53,7 +44,7 @@ class H2H2OForceField(ForceField):
 
 
         # INITIALIZE ARRAY for 501 rad points, 181 theta points, 91 chi points
-        Nwater=20
+        Nwater=20       # 5^12 (Small) Cage
         pot=zeros(8251971)
         dvdr=zeros(8251971)
         dvdt=zeros(8251971)
@@ -86,13 +77,13 @@ class H2H2OForceField(ForceField):
             dvdc[i]=float(dummy)
         file.close()
 
-        file=open('watercom.20','r')
+        file=open('watercom.20','r')     #5^12 (Small) Cage
         for i in range (3*Nwater):
             dummy=file.readline()
             r_com[i]=float(dummy)
         file.close()
 
-        file=open('rotmat.20','r')
+        file=open('rotmat.20','r')       #5^12 (Small) Cage
         for i in range (9*Nwater):
             dummy=file.readline()
             rotmat[i]=float(dummy)
@@ -104,9 +95,6 @@ class H2H2OForceField(ForceField):
                             pot,dvdr,dvdt,dvdc,r_com, rotmat,
                             self.atom_index + o) for o, in offsets]    
     
-    #        return [H2H2OTerm(universe._spec, atom1.index)]
-    #        return [H2H2OTerm(universe._spec, atom1.index, self.beads)]
-
     # This method returns the string that is inserted into the universe
     # descriptions in trajectories. It is the class name followed by
     # the arguments, just what it takes to re-create an equivalent object.
